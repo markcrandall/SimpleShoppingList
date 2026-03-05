@@ -93,12 +93,12 @@ function renderCollectionIndex(state, container) {
       const count = Object.keys(col.items).length;
       const neededCount = Object.values(col.items).filter(i => i.needed).length;
       html += `
-        <div class="collection-card" data-action="open-collection" data-id="${col.id}">
-          <div>
+        <div class="collection-card">
+          <div data-action="manage-collection" data-id="${col.id}" style="flex:1;cursor:pointer">
             <div class="collection-label">${escapeHtml(col.label)}</div>
             <div class="collection-count">${count} item${count !== 1 ? "s" : ""}${neededCount ? `, ${neededCount} needed` : ""}</div>
           </div>
-          <span class="collection-arrow">&#8250;</span>
+          <span class="collection-arrow" data-action="open-collection" data-id="${col.id}" style="cursor:pointer;padding:8px">&#8250;</span>
         </div>`;
     }
   }
@@ -117,6 +117,9 @@ function attachIndexEvents(container) {
     switch (target.dataset.action) {
       case "open-collection":
         location.hash = `#lists/${target.dataset.id}`;
+        break;
+      case "manage-collection":
+        openManageCollectionModal(target.dataset.id);
         break;
       case "add-collection":
         openAddCollectionModal();
@@ -165,6 +168,96 @@ function openAddCollectionModal() {
           }
         }
       });
+    }
+  });
+}
+
+function openManageCollectionModal(collectionId) {
+  const state = store.getState();
+  const col = state.collections[collectionId];
+  if (!col) return;
+
+  const html = `
+    <div class="modal-header">
+      <h3>Manage List</h3>
+      <button class="btn-icon" data-action="close">&times;</button>
+    </div>
+    <div class="modal-section">
+      <label class="form-label">Rename</label>
+      <div class="input-row">
+        <input class="input-field" type="text" id="rename-collection-input" value="${escapeHtml(col.label)}">
+        <button class="btn btn-primary" data-action="rename-collection" data-id="${collectionId}">Save</button>
+      </div>
+    </div>
+    <div class="modal-section">
+      <label class="form-label">Delete</label>
+      <p style="font-size:14px;color:var(--color-text-secondary);margin-bottom:8px">This will remove the list and all its items from the trip.</p>
+      <button class="btn btn-danger" data-action="delete-collection" data-id="${collectionId}">Delete List</button>
+    </div>`;
+
+  openModal(html, (action, data) => {
+    switch (action) {
+      case "close":
+        closeModal();
+        break;
+      case "rename-collection": {
+        const input = document.getElementById("rename-collection-input");
+        const name = input.value.trim();
+        if (name) {
+          store.renameCollection(data.id, name);
+          closeModal();
+        }
+        break;
+      }
+      case "delete-collection":
+        openDeleteCollectionConfirmModal(data.id);
+        break;
+    }
+  });
+
+  requestAnimationFrame(() => {
+    const input = document.getElementById("rename-collection-input");
+    if (input) {
+      input.select();
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          const name = input.value.trim();
+          if (name) {
+            store.renameCollection(collectionId, name);
+            closeModal();
+          }
+        }
+      });
+    }
+  });
+}
+
+function openDeleteCollectionConfirmModal(collectionId) {
+  const state = store.getState();
+  const col = state.collections[collectionId];
+  if (!col) return;
+
+  const count = Object.keys(col.items).length;
+  const html = `
+    <div class="modal-header">
+      <h3>Delete List</h3>
+      <button class="btn-icon" data-action="close">&times;</button>
+    </div>
+    <p>Delete <strong>${escapeHtml(col.label)}</strong>${count ? ` and its ${count} item${count !== 1 ? "s" : ""}` : ""}? This cannot be undone.</p>
+    <div class="confirm-actions">
+      <button class="btn btn-secondary" data-action="close">Cancel</button>
+      <button class="btn btn-danger" data-action="confirm-delete" data-id="${collectionId}">Delete</button>
+    </div>`;
+
+  openModal(html, (action, data) => {
+    switch (action) {
+      case "close":
+        closeModal();
+        break;
+      case "confirm-delete":
+        store.removeCollection(data.id);
+        closeModal();
+        break;
     }
   });
 }

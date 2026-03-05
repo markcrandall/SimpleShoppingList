@@ -213,6 +213,13 @@ export const store = {
     return finalId;
   },
 
+  renameCollection(collectionId, newLabel) {
+    const col = this._state.collections[collectionId];
+    if (!col) return;
+    col.label = newLabel;
+    this._notify();
+  },
+
   removeCollection(collectionId) {
     if (!this._state.collections[collectionId]) return;
 
