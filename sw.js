@@ -1,4 +1,4 @@
-const CACHE_NAME = "shopping-list-v12";
+const CACHE_NAME = "shopping-list-v13";
 const ASSETS = [
   "./",
   "./index.html",
@@ -37,21 +37,17 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return (
-        cached ||
-        fetch(event.request).then((response) => {
-          if (
-            event.request.method !== "GET" ||
-            !event.request.url.startsWith(self.location.origin)
-          ) {
-            return response;
-          }
+    fetch(event.request)
+      .then((response) => {
+        if (
+          event.request.method === "GET" &&
+          event.request.url.startsWith(self.location.origin)
+        ) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-      );
-    })
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
