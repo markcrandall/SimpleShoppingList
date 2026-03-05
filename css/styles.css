@@ -697,6 +697,17 @@ body {
   color: var(--color-text-secondary);
 }
 
+/* App version footer */
+.app-version {
+  position: fixed;
+  bottom: 4px;
+  right: 8px;
+  font-size: 10px;
+  color: var(--color-border);
+  pointer-events: none;
+  z-index: 1;
+}
+
 /* Responsive */
 @media (min-width: 600px) {
   .modal-content {
