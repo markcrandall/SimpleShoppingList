@@ -3,6 +3,8 @@ import { collectAllTags, escapeHtml, sortByCategory } from "../helpers.js";
 import { renderTagFilterBar, renderEditableTags, filterByTag, setActiveFilter } from "../components/tag-chips.js";
 import { openModal, closeModal } from "../components/modal.js";
 
+let itemsSearchQuery = "";
+
 export function renderItems(state, container) {
   const scrollTop = container.scrollTop;
   const catalogItems = Object.values(state.catalog);
@@ -25,15 +27,23 @@ export function renderItems(state, container) {
         <input type="file" id="import-csv-input" accept=".csv,text/csv" style="display:none">
       </div>
     </div>
-    ${renderTagFilterBar(allTags)}`;
+    ${renderTagFilterBar(allTags)}
+    <div class="search-row">
+      <input class="input-field" type="text" id="items-search-input" placeholder="Search items..." value="${escapeHtml(itemsSearchQuery)}">
+      ${itemsSearchQuery ? `<button class="btn-icon search-clear" data-action="clear-search" title="Clear">&times;</button>` : ""}
+    </div>`;
+
+  const searchFiltered = itemsSearchQuery
+    ? sorted.filter(item => item.name.toLowerCase().includes(itemsSearchQuery.toLowerCase()))
+    : sorted;
 
   if (!catalogItems.length) {
     html += `<div class="empty-state"><p>No items in your catalog.<br>Create your first item.</p></div>`;
-  } else if (!filtered.length) {
-    html += `<div class="empty-state"><p>No items match the current filter.</p></div>`;
+  } else if (!searchFiltered.length) {
+    html += `<div class="empty-state"><p>No items match your search.</p></div>`;
   } else {
     // Group by category
-    const groups = groupByCategory(sorted, state.catalog);
+    const groups = groupByCategory(searchFiltered, state.catalog);
     for (const group of groups) {
       html += `<div class="category-header">${group.label}</div>`;
       html += `<ul class="item-list">`;
@@ -120,6 +130,11 @@ function attachItemsEvents(container) {
         }
         break;
       }
+      case "clear-search":
+        e.stopPropagation();
+        itemsSearchQuery = "";
+        renderItems(store.getState(), container);
+        break;
       case "filter-tag":
         setActiveFilter(target.dataset.tag);
         renderItems(store.getState(), container);
@@ -142,6 +157,20 @@ function attachItemsEvents(container) {
       alert(err.message);
     }
     e.target.value = "";
+  });
+
+  // Handle search input
+  container.addEventListener("input", (e) => {
+    if (e.target.id === "items-search-input") {
+      itemsSearchQuery = e.target.value;
+      renderItems(store.getState(), container);
+      // Restore focus and cursor position
+      const input = document.getElementById("items-search-input");
+      if (input) {
+        input.focus();
+        input.selectionStart = input.selectionEnd = input.value.length;
+      }
+    }
   });
 
   // Handle tag input Enter key

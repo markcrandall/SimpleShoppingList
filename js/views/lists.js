@@ -65,6 +65,8 @@ function renderListFilterBar(allStores, allTags) {
   return `<div class="tag-filter-bar">${chips}</div>`;
 }
 
+let listSearchQuery = "";
+
 export function renderLists(state, container, collectionId) {
   if (collectionId) {
     renderCollectionDetail(state, container, collectionId);
@@ -191,15 +193,26 @@ function renderCollectionDetail(state, container, collectionId) {
         <button class="btn btn-primary btn-small" data-action="add-item-to-collection">+ Add Item</button>
       </div>
     </div>
-    ${renderListFilterBar(allStores, allTags)}`;
+    ${renderListFilterBar(allStores, allTags)}
+    <div class="search-row">
+      <input class="input-field" type="text" id="list-search-input" placeholder="Search items..." value="${escapeHtml(listSearchQuery)}">
+      ${listSearchQuery ? `<button class="btn-icon search-clear" data-action="clear-search" title="Clear">&times;</button>` : ""}
+    </div>`;
+
+  const searchFiltered = listSearchQuery
+    ? filtered.filter(item => {
+        const catItem = state.catalog[item.baseId];
+        return catItem && catItem.name.toLowerCase().includes(listSearchQuery.toLowerCase());
+      })
+    : filtered;
 
   if (!items.length) {
     html += `<div class="empty-state"><p>No items in this list.<br>Add items from the catalog.</p></div>`;
-  } else if (!filtered.length) {
-    html += `<div class="empty-state"><p>No items match the current filter.</p></div>`;
+  } else if (!searchFiltered.length) {
+    html += `<div class="empty-state"><p>No items match your search.</p></div>`;
   } else {
     html += `<ul class="item-list">`;
-    for (const item of filtered) {
+    for (const item of searchFiltered) {
       const catItem = state.catalog[item.baseId];
       if (!catItem) continue;
       const tags = renderItemTags(catItem.tags);
@@ -246,7 +259,13 @@ function attachDetailEvents(container, collectionId) {
     switch (target.dataset.action) {
       case "back":
         clearListFilters();
+        listSearchQuery = "";
         location.hash = "#lists";
+        break;
+      case "clear-search":
+        e.stopPropagation();
+        listSearchQuery = "";
+        renderCollectionDetail(store.getState(), container, _currentCollectionId);
         break;
       case "toggle-needed": {
         e.preventDefault();
@@ -269,6 +288,18 @@ function attachDetailEvents(container, collectionId) {
         toggleFilter(target.dataset.filterKey);
         renderCollectionDetail(store.getState(), container, _currentCollectionId);
         break;
+    }
+  });
+
+  container.addEventListener("input", (e) => {
+    if (e.target.id === "list-search-input") {
+      listSearchQuery = e.target.value;
+      renderCollectionDetail(store.getState(), container, _currentCollectionId);
+      const input = document.getElementById("list-search-input");
+      if (input) {
+        input.focus();
+        input.selectionStart = input.selectionEnd = input.value.length;
+      }
     }
   });
 }

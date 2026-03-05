@@ -63,6 +63,8 @@ function renderTripFilterBar(allStores, allTags) {
   return `<div class="tag-filter-bar">${chips}</div>`;
 }
 
+let tripSearchQuery = "";
+
 export function renderTrip(state, container) {
   const scrollTop = container.scrollTop;
   const allItems = state.trip.items;
@@ -82,21 +84,32 @@ export function renderTrip(state, container) {
         <button class="btn btn-primary btn-small" data-action="add-trip-item">+ Add</button>
       </div>
     </div>
-    ${renderTripFilterBar(allStores, allTags)}`;
+    ${renderTripFilterBar(allStores, allTags)}
+    <div class="search-row">
+      <input class="input-field" type="text" id="trip-search-input" placeholder="Search items..." value="${escapeHtml(tripSearchQuery)}">
+      ${tripSearchQuery ? `<button class="btn-icon search-clear" data-action="clear-search" title="Clear">&times;</button>` : ""}
+    </div>`;
+
+  const searchUnchecked = tripSearchQuery
+    ? unchecked.filter(i => getTripItemName(state, i).toLowerCase().includes(tripSearchQuery.toLowerCase()))
+    : unchecked;
+  const searchChecked = tripSearchQuery
+    ? checked.filter(i => getTripItemName(state, i).toLowerCase().includes(tripSearchQuery.toLowerCase()))
+    : checked;
 
   if (!allItems.length) {
     html += `<div class="empty-state"><p>Your trip list is empty.<br>Add items from your lists or create a one-off item.</p></div>`;
-  } else if (!filtered.length) {
-    html += `<div class="empty-state"><p>No items match the current filter.</p></div>`;
+  } else if (!searchUnchecked.length && !searchChecked.length) {
+    html += `<div class="empty-state"><p>No items match your search.</p></div>`;
   } else {
     html += `<ul class="item-list">`;
-    for (const item of unchecked) {
+    for (const item of searchUnchecked) {
       html += renderTripItem(state, item);
     }
-    if (checked.length && unchecked.length) {
+    if (searchChecked.length && searchUnchecked.length) {
       html += `</ul><div class="section-separator">Completed</div><ul class="item-list">`;
     }
-    for (const item of checked) {
+    for (const item of searchChecked) {
       html += renderTripItem(state, item);
     }
     html += `</ul>`;
@@ -159,10 +172,27 @@ function attachTripEvents(container) {
       case "add-trip-item":
         openAddTripModal();
         break;
+      case "clear-search":
+        e.stopPropagation();
+        tripSearchQuery = "";
+        renderTrip(store.getState(), container);
+        break;
       case "filter-chip":
         toggleFilter(target.dataset.filterKey);
         renderTrip(store.getState(), container);
         break;
+    }
+  });
+
+  container.addEventListener("input", (e) => {
+    if (e.target.id === "trip-search-input") {
+      tripSearchQuery = e.target.value;
+      renderTrip(store.getState(), container);
+      const input = document.getElementById("trip-search-input");
+      if (input) {
+        input.focus();
+        input.selectionStart = input.selectionEnd = input.value.length;
+      }
     }
   });
 }

@@ -678,6 +678,25 @@ body {
   display: block;
 }
 
+/* Search row */
+.search-row {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.search-row .input-field {
+  width: 100%;
+  padding-right: 36px;
+}
+
+.search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-secondary);
+}
+
 /* Responsive */
 @media (min-width: 600px) {
   .modal-content {
