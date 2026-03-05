@@ -93,12 +93,15 @@ function renderCollectionIndex(state, container) {
       const count = Object.keys(col.items).length;
       const neededCount = Object.values(col.items).filter(i => i.needed).length;
       html += `
-        <div class="collection-card">
-          <div data-action="manage-collection" data-id="${col.id}" style="flex:1;cursor:pointer">
+        <div class="collection-card" data-action="open-collection" data-id="${col.id}">
+          <div>
             <div class="collection-label">${escapeHtml(col.label)}</div>
             <div class="collection-count">${count} item${count !== 1 ? "s" : ""}${neededCount ? `, ${neededCount} needed` : ""}</div>
           </div>
-          <span class="collection-arrow" data-action="open-collection" data-id="${col.id}" style="cursor:pointer;padding:8px">&#8250;</span>
+          <div style="display:flex;align-items:center;gap:4px">
+            <button class="btn-icon" data-action="manage-collection" data-id="${col.id}" title="Settings">&#9881;</button>
+            <span class="collection-arrow">&#8250;</span>
+          </div>
         </div>`;
     }
   }
@@ -119,6 +122,7 @@ function attachIndexEvents(container) {
         location.hash = `#lists/${target.dataset.id}`;
         break;
       case "manage-collection":
+        e.stopPropagation();
         openManageCollectionModal(target.dataset.id);
         break;
       case "add-collection":
