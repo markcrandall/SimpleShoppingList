@@ -95,13 +95,10 @@ function renderCollectionIndex(state, container) {
       html += `
         <div class="collection-card" data-action="open-collection" data-id="${col.id}">
           <div>
-            <div class="collection-label">${escapeHtml(col.label)}</div>
+            <div class="collection-label" style="display:inline-flex;align-items:center;gap:6px">${escapeHtml(col.label)}<button class="btn-icon" data-action="manage-collection" data-id="${col.id}" title="Settings" style="font-size:14px;width:20px;height:20px">&#9881;</button></div>
             <div class="collection-count">${count} item${count !== 1 ? "s" : ""}${neededCount ? `, ${neededCount} needed` : ""}</div>
           </div>
-          <div style="display:flex;align-items:center;gap:4px">
-            <button class="btn-icon" data-action="manage-collection" data-id="${col.id}" title="Settings">&#9881;</button>
-            <span class="collection-arrow">&#8250;</span>
-          </div>
+          <span class="collection-arrow">&#8250;</span>
         </div>`;
     }
   }
