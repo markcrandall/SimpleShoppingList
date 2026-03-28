@@ -80,8 +80,11 @@ export function renderTrip(state, container) {
     <div class="view-header">
       <h2>Shopping Trip</h2>
       <div class="view-header-actions">
+        <button class="btn btn-secondary btn-small" data-action="import-csv">Import</button>
+        <button class="btn btn-secondary btn-small" data-action="export-csv">Export</button>
         ${hasChecked ? `<button class="btn btn-secondary btn-small" data-action="clear-checked">Clear Done</button>` : ""}
         <button class="btn btn-primary btn-small" data-action="add-trip-item">+ Add</button>
+        <input type="file" id="import-trip-csv-input" accept=".csv,text/csv" style="display:none">
       </div>
     </div>
     ${renderTripFilterBar(allStores, allTags)}
@@ -177,11 +180,34 @@ function attachTripEvents(container) {
         tripSearchQuery = "";
         renderTrip(store.getState(), container);
         break;
+      case "import-csv":
+        document.getElementById("import-trip-csv-input")?.click();
+        break;
+      case "export-csv":
+        exportTripCsv(store.getState());
+        break;
       case "filter-chip":
         toggleFilter(target.dataset.filterKey);
         renderTrip(store.getState(), container);
         break;
     }
+  });
+
+  // Handle CSV file import
+  container.addEventListener("change", async (e) => {
+    if (e.target.id !== "import-trip-csv-input") return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const items = parseTripCsv(text);
+      for (const item of items) {
+        store.addTripItemOneOff(item.name);
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+    e.target.value = "";
   });
 
   container.addEventListener("input", (e) => {
@@ -279,4 +305,87 @@ function openAddTripModal() {
       });
     }
   });
+}
+
+// --- CSV Import/Export ---
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cur = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (inQuotes) {
+      if (ch === `"` && next === `"`) { cur += `"`; i++; }
+      else if (ch === `"`) inQuotes = false;
+      else cur += ch;
+    } else {
+      if (ch === `"`) inQuotes = true;
+      else if (ch === ",") { row.push(cur); cur = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && next === "\n") i++;
+        row.push(cur); cur = "";
+        if (row.length > 1 || row[0] !== "") rows.push(row);
+        row = [];
+      } else cur += ch;
+    }
+  }
+  row.push(cur);
+  if (row.length > 1 || row[0] !== "") rows.push(row);
+  return rows;
+}
+
+function parseTripCsv(csvText) {
+  const rows = parseCsv(csvText);
+  if (!rows.length) return [];
+  const norm = s => s.trim().toLowerCase();
+  const header = rows[0].map(norm);
+  const nameIdx = header.indexOf("name");
+  if (nameIdx === -1) throw new Error('CSV must have a "name" column.');
+  const items = [];
+  for (const r of rows.slice(1)) {
+    const name = (r[nameIdx] || "").trim();
+    if (!name) continue;
+    items.push({ name });
+  }
+  return items;
+}
+
+function csvEscape(value) {
+  const s = String(value ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function toCsvRow(cols) {
+  return cols.map(csvEscape).join(",");
+}
+
+function exportTripCsv(state) {
+  const items = state.trip.items;
+  if (!items.length) return;
+  const rows = [
+    toCsvRow(["name", "category", "stores", "tags", "source", "checked"]),
+    ...items.map(item => {
+      const name = getTripItemName(state, item);
+      const category = item.baseId ? (state.catalog[item.baseId]?.category || "") : "";
+      const stores = getStoresForTripItem(state, item);
+      const tags = getTagsForTripItem(state, item);
+      const source = getTripItemSource(state, item);
+      return toCsvRow([
+        name,
+        category,
+        stores.join("|"),
+        tags.join("|"),
+        source,
+        item.checked ? "yes" : "",
+      ]);
+    }),
+  ];
+  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "shopping-trip.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
 }

@@ -82,6 +82,7 @@ function renderCollectionIndex(state, container) {
     <div class="view-header">
       <h2>Lists</h2>
       <div class="view-header-actions">
+        <button class="btn btn-secondary btn-small" data-action="import-new-list">Import New</button>
         <button class="btn btn-primary btn-small" data-action="add-collection">+ New List</button>
       </div>
     </div>`;
@@ -125,7 +126,84 @@ function attachIndexEvents(container) {
       case "add-collection":
         openAddCollectionModal();
         break;
+      case "import-new-list":
+        openImportNewListModal();
+        break;
     }
+  });
+}
+
+function openImportNewListModal() {
+  const html = `
+    <div class="modal-header">
+      <h3>Import List</h3>
+      <button class="btn-icon" data-action="close">&times;</button>
+    </div>
+    <div class="modal-section">
+      <label class="form-label">List Name</label>
+      <input class="input-field" type="text" id="import-list-name-input" placeholder="List name...">
+      <div id="import-name-error" style="color:var(--color-danger);font-size:13px;margin-top:4px;display:none"></div>
+    </div>
+    <div class="modal-section">
+      <label class="form-label">CSV File</label>
+      <input type="file" id="import-new-list-file" accept=".csv,text/csv">
+    </div>
+    <div style="text-align:right;margin-top:12px">
+      <button class="btn btn-primary" data-action="do-import">Import</button>
+    </div>`;
+
+  openModal(html, async (action) => {
+    switch (action) {
+      case "close":
+        closeModal();
+        break;
+      case "do-import": {
+        const nameInput = document.getElementById("import-list-name-input");
+        const fileInput = document.getElementById("import-new-list-file");
+        const name = nameInput.value.trim();
+        const file = fileInput.files?.[0];
+        const errorEl = document.getElementById("import-name-error");
+        errorEl.style.display = "none";
+        if (!name) { nameInput.focus(); return; }
+        const existing = Object.values(store.getState().collections).find(
+          c => c.label.toLowerCase() === name.toLowerCase()
+        );
+        if (existing) {
+          errorEl.textContent = `List "${existing.label}" already exists.`;
+          errorEl.style.display = "block";
+          nameInput.focus();
+          return;
+        }
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const items = parseListCsv(text);
+          if (items.length) {
+            store.importCatalogItems(items);
+            const colId = store.addCollection(name);
+            const norm = s => s.trim().toLowerCase().replace(/\s+/g, " ");
+            const catalogByName = new Map(
+              Object.values(store.getState().catalog).map(it => [norm(it.name), it])
+            );
+            for (const item of items) {
+              const cat = catalogByName.get(norm(item.name));
+              if (cat) {
+                store.addItemToCollection(colId, cat.id);
+              }
+            }
+            closeModal();
+            location.hash = `#lists/${colId}`;
+          }
+        } catch (err) {
+          alert(err.message);
+        }
+        break;
+      }
+    }
+  });
+
+  requestAnimationFrame(() => {
+    document.getElementById("import-list-name-input")?.focus();
   });
 }
 
