@@ -342,6 +342,47 @@ export const store = {
     this._notify();
   },
 
+  exportCollection(collectionId) {
+    const col = this._state.collections[collectionId];
+    if (!col) return null;
+    const items = Object.values(col.items).map(item => {
+      const cat = this._state.catalog[item.baseId];
+      return {
+        name: cat?.name || item.baseId,
+        tags: cat?.tags || [],
+        category: cat?.category || "",
+        stores: cat?.stores || [],
+      };
+    });
+    return { label: col.label, items };
+  },
+
+  importCollection(data) {
+    if (!data?.label || !Array.isArray(data.items)) return null;
+    // Import catalog entries (merges with existing)
+    this.importCatalogItems(data.items);
+    // Create the collection
+    const colId = this.addCollection(data.label);
+    // Add items to the collection
+    const norm = s => s.trim().toLowerCase().replace(/\s+/g, " ");
+    const catalogByName = new Map(
+      Object.values(this._state.catalog).map(it => [norm(it.name), it])
+    );
+    for (const item of data.items) {
+      if (!item.name?.trim()) continue;
+      const cat = catalogByName.get(norm(item.name));
+      if (cat) {
+        this._state.collections[colId].items[cat.id] = {
+          id: cat.id,
+          baseId: cat.id,
+          needed: false,
+        };
+      }
+    }
+    this._notify();
+    return colId;
+  },
+
   clearCheckedTripItems() {
     const checked = this._state.trip.items.filter(t => t.checked);
 

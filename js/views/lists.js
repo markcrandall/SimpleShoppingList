@@ -82,6 +82,7 @@ function renderCollectionIndex(state, container) {
     <div class="view-header">
       <h2>Lists</h2>
       <div class="view-header-actions">
+        <button class="btn btn-secondary btn-small" data-action="import-collection">Import</button>
         <button class="btn btn-primary btn-small" data-action="add-collection">+ New List</button>
       </div>
     </div>`;
@@ -125,8 +126,35 @@ function attachIndexEvents(container) {
       case "add-collection":
         openAddCollectionModal();
         break;
+      case "import-collection":
+        importCollectionFromFile();
+        break;
     }
   });
+}
+
+function importCollectionFromFile() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.addEventListener("change", () => {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        const colId = store.importCollection(data);
+        if (colId) {
+          location.hash = `#lists/${colId}`;
+        }
+      } catch {
+        alert("Invalid list file.");
+      }
+    };
+    reader.readAsText(file);
+  });
+  input.click();
 }
 
 function openAddCollectionModal() {
@@ -191,6 +219,10 @@ function openManageCollectionModal(collectionId) {
       </div>
     </div>
     <div class="modal-section">
+      <label class="form-label">Export</label>
+      <button class="btn btn-secondary" data-action="export-collection" data-id="${collectionId}">Download JSON</button>
+    </div>
+    <div class="modal-section">
       <label class="form-label">Delete</label>
       <p style="font-size:14px;color:var(--color-text-secondary);margin-bottom:8px">This will remove the list and all its items from the trip.</p>
       <button class="btn btn-danger" data-action="delete-collection" data-id="${collectionId}">Delete List</button>
@@ -207,6 +239,19 @@ function openManageCollectionModal(collectionId) {
         if (name) {
           store.renameCollection(data.id, name);
           closeModal();
+        }
+        break;
+      }
+      case "export-collection": {
+        const exported = store.exportCollection(data.id);
+        if (exported) {
+          const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${exported.label}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
         }
         break;
       }
