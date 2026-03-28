@@ -82,7 +82,6 @@ function renderCollectionIndex(state, container) {
     <div class="view-header">
       <h2>Lists</h2>
       <div class="view-header-actions">
-        <button class="btn btn-secondary btn-small" data-action="import-collection">Import</button>
         <button class="btn btn-primary btn-small" data-action="add-collection">+ New List</button>
       </div>
     </div>`;
@@ -126,35 +125,8 @@ function attachIndexEvents(container) {
       case "add-collection":
         openAddCollectionModal();
         break;
-      case "import-collection":
-        importCollectionFromFile();
-        break;
     }
   });
-}
-
-function importCollectionFromFile() {
-  const input = document.createElement("input");
-  input.type = "file";
-  input.accept = ".json";
-  input.addEventListener("change", () => {
-    const file = input.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(reader.result);
-        const colId = store.importCollection(data);
-        if (colId) {
-          location.hash = `#lists/${colId}`;
-        }
-      } catch {
-        alert("Invalid list file.");
-      }
-    };
-    reader.readAsText(file);
-  });
-  input.click();
 }
 
 function openAddCollectionModal() {
@@ -219,10 +191,6 @@ function openManageCollectionModal(collectionId) {
       </div>
     </div>
     <div class="modal-section">
-      <label class="form-label">Export</label>
-      <button class="btn btn-secondary" data-action="export-collection" data-id="${collectionId}">Download JSON</button>
-    </div>
-    <div class="modal-section">
       <label class="form-label">Delete</label>
       <p style="font-size:14px;color:var(--color-text-secondary);margin-bottom:8px">This will remove the list and all its items from the trip.</p>
       <button class="btn btn-danger" data-action="delete-collection" data-id="${collectionId}">Delete List</button>
@@ -239,19 +207,6 @@ function openManageCollectionModal(collectionId) {
         if (name) {
           store.renameCollection(data.id, name);
           closeModal();
-        }
-        break;
-      }
-      case "export-collection": {
-        const exported = store.exportCollection(data.id);
-        if (exported) {
-          const blob = new Blob([JSON.stringify(exported, null, 2)], { type: "application/json" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `${exported.label}.json`;
-          a.click();
-          URL.revokeObjectURL(url);
         }
         break;
       }
@@ -329,7 +284,10 @@ function renderCollectionDetail(state, container, collectionId) {
     <div class="view-header">
       <h2>${escapeHtml(col.label)}</h2>
       <div class="view-header-actions">
+        <button class="btn btn-secondary btn-small" data-action="import-csv">Import</button>
+        <button class="btn btn-secondary btn-small" data-action="export-csv">Export</button>
         <button class="btn btn-primary btn-small" data-action="add-item-to-collection">+ Add Item</button>
+        <input type="file" id="import-list-csv-input" accept=".csv,text/csv" style="display:none">
       </div>
     </div>
     ${renderListFilterBar(allStores, allTags)}
@@ -423,11 +381,44 @@ function attachDetailEvents(container, collectionId) {
       case "add-item-to-collection":
         openAddItemToCollectionModal(_currentCollectionId);
         break;
+      case "import-csv":
+        document.getElementById("import-list-csv-input")?.click();
+        break;
+      case "export-csv":
+        exportListCsv(store.getState(), _currentCollectionId);
+        break;
       case "filter-chip":
         toggleFilter(target.dataset.filterKey);
         renderCollectionDetail(store.getState(), container, _currentCollectionId);
         break;
     }
+  });
+
+  // Handle CSV file import
+  container.addEventListener("change", async (e) => {
+    if (e.target.id !== "import-list-csv-input") return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const items = parseListCsv(text);
+      if (items.length) {
+        store.importCatalogItems(items);
+        const norm = s => s.trim().toLowerCase().replace(/\s+/g, " ");
+        const catalogByName = new Map(
+          Object.values(store.getState().catalog).map(it => [norm(it.name), it])
+        );
+        for (const item of items) {
+          const cat = catalogByName.get(norm(item.name));
+          if (cat) {
+            store.addItemToCollection(_currentCollectionId, cat.id);
+          }
+        }
+      }
+    } catch (err) {
+      alert(err.message);
+    }
+    e.target.value = "";
   });
 
   container.addEventListener("input", (e) => {
@@ -516,4 +507,90 @@ function openAddItemToCollectionModal(collectionId) {
       });
     }
   });
+}
+
+// --- CSV Import/Export ---
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cur = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (inQuotes) {
+      if (ch === `"` && next === `"`) { cur += `"`; i++; }
+      else if (ch === `"`) inQuotes = false;
+      else cur += ch;
+    } else {
+      if (ch === `"`) inQuotes = true;
+      else if (ch === ",") { row.push(cur); cur = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && next === "\n") i++;
+        row.push(cur); cur = "";
+        if (row.length > 1 || row[0] !== "") rows.push(row);
+        row = [];
+      } else cur += ch;
+    }
+  }
+  row.push(cur);
+  if (row.length > 1 || row[0] !== "") rows.push(row);
+  return rows;
+}
+
+function parseListCsv(csvText) {
+  const rows = parseCsv(csvText);
+  if (!rows.length) return [];
+  const norm = s => s.trim().toLowerCase();
+  const header = rows[0].map(norm);
+  const nameIdx = header.indexOf("name");
+  const tagsIdx = header.indexOf("tags");
+  const categoryIdx = header.indexOf("category");
+  const storesIdx = header.indexOf("stores");
+  if (nameIdx === -1) throw new Error('CSV must have a "name" column.');
+  const items = [];
+  for (const r of rows.slice(1)) {
+    const name = (r[nameIdx] || "").trim();
+    if (!name) continue;
+    const tagCell = tagsIdx >= 0 ? (r[tagsIdx] || "") : "";
+    const tags = [...new Set(tagCell.split("|").map(t => t.trim()).filter(Boolean))];
+    const category = categoryIdx >= 0 ? (r[categoryIdx] || "").trim() : "";
+    const storeCell = storesIdx >= 0 ? (r[storesIdx] || "") : "";
+    const stores = [...new Set(storeCell.split("|").map(s => s.trim()).filter(Boolean))];
+    items.push({ name, tags, category, stores });
+  }
+  return items;
+}
+
+function csvEscape(value) {
+  const s = String(value ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function toCsvRow(cols) {
+  return cols.map(csvEscape).join(",");
+}
+
+function exportListCsv(state, collectionId) {
+  const col = state.collections[collectionId];
+  if (!col) return;
+  const items = Object.values(col.items)
+    .map(item => state.catalog[item.baseId])
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const rows = [
+    toCsvRow(["name", "category", "stores", "tags"]),
+    ...items.map(it => toCsvRow([
+      it.name,
+      it.category || "",
+      (it.stores || []).join("|"),
+      (it.tags || []).join("|"),
+    ])),
+  ];
+  const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${col.label}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
