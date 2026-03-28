@@ -318,6 +318,16 @@ export const store = {
     this._notify();
   },
 
+  addTripItemFromCatalog(baseId) {
+    if (!this._state.catalog[baseId]) return;
+    this._state.trip.items.push({
+      id: generateId(),
+      baseId,
+      checked: false,
+    });
+    this._notify();
+  },
+
   toggleTripItemChecked(tripItemId) {
     const item = this._state.trip.items.find(t => t.id === tripItemId);
     if (item) {

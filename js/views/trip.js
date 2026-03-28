@@ -201,8 +201,18 @@ function attachTripEvents(container) {
     try {
       const text = await file.text();
       const items = parseTripCsv(text);
-      for (const item of items) {
-        store.addTripItemOneOff(item.name);
+      if (items.length) {
+        store.importCatalogItems(items);
+        const norm = s => s.trim().toLowerCase().replace(/\s+/g, " ");
+        const catalogByName = new Map(
+          Object.values(store.getState().catalog).map(it => [norm(it.name), it])
+        );
+        for (const item of items) {
+          const cat = catalogByName.get(norm(item.name));
+          if (cat) {
+            store.addTripItemFromCatalog(cat.id);
+          }
+        }
       }
     } catch (err) {
       alert(err.message);
@@ -341,12 +351,20 @@ function parseTripCsv(csvText) {
   const norm = s => s.trim().toLowerCase();
   const header = rows[0].map(norm);
   const nameIdx = header.indexOf("name");
+  const tagsIdx = header.indexOf("tags");
+  const categoryIdx = header.indexOf("category");
+  const storesIdx = header.indexOf("stores");
   if (nameIdx === -1) throw new Error('CSV must have a "name" column.');
   const items = [];
   for (const r of rows.slice(1)) {
     const name = (r[nameIdx] || "").trim();
     if (!name) continue;
-    items.push({ name });
+    const tagCell = tagsIdx >= 0 ? (r[tagsIdx] || "") : "";
+    const tags = [...new Set(tagCell.split("|").map(t => t.trim()).filter(Boolean))];
+    const category = categoryIdx >= 0 ? (r[categoryIdx] || "").trim() : "";
+    const storeCell = storesIdx >= 0 ? (r[storesIdx] || "") : "";
+    const stores = [...new Set(storeCell.split("|").map(s => s.trim()).filter(Boolean))];
+    items.push({ name, tags, category, stores });
   }
   return items;
 }
